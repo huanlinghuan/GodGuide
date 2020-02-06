@@ -1,4 +1,3 @@
-let async = require('async');
 import { GodCommand } from "./GodCommand";
 import { Locator } from "./Locator";
 
@@ -68,12 +67,12 @@ function touchSimulation(x, y) {
         rect.left = 0;
         rect.top = 0;
     }
-    
+
     let vp = cc.view.getViewportRect();
     let sx = cc.view.getScaleX();
     let sy = cc.view.getScaleY();
     let ratio = cc.view.getDevicePixelRatio();
-    let htmlx = (x * sx  + vp.x) / ratio + rect.left;
+    let htmlx = (x * sx + vp.x) / ratio + rect.left;
     let htmly = rect.top + rect.height - (y * sy + vp.y) / ratio;
     let pt = cc.v2(htmlx, htmly);
 
@@ -81,25 +80,14 @@ function touchSimulation(x, y) {
     let touch = inputManager.getTouchByXY(pt.x, pt.y, rect);
     inputManager.handleTouchesBegin([touch]);
     setTimeout(() => {
-        inputManager.handleTouchesEnd([touch]);    
+        inputManager.handleTouchesEnd([touch]);
     }, 200);
-    
-    // let click = document.createEvent("MouseEvents");
-    // click.initMouseEvent("mousedown", true, true, window, 0, 0, 0, pt.x, pt.y, true, false, false, false, 0, null);
-    // canvas.dispatchEvent(click);
-    // setTimeout(function () {
-    //     let mouseup = document.createEvent("MouseEvent");
-    //     mouseup.initMouseEvent("mouseup", true, true, window, 0, 0, 0, pt.x, pt.y, true, false, false, false, 0, null);
-    //     canvas.dispatchEvent(mouseup);
-    // }, 500);
+
 }
 
 const { ccclass, property } = cc._decorator;
 @ccclass
 export default class GodGuide extends cc.Component {
-
-    // @property(cc.Label)
-    // label: cc.Label = null;
 
     _selector: string = '';
     get selector(): string {
@@ -231,73 +219,53 @@ export default class GodGuide extends cc.Component {
         return this._task;
     }
 
-    run(callback?) {
+    async run(callback?) {
         if (!this._task) {
             return;
         }
         console.log('this._task.steps---------->', this._task.steps)
-        async.eachSeries(this._task.steps, (step, cb) => {
-            this._processStep(step, cb);
-        }, () => {
-            this._task = null;
-            cc.log('任务结束');
-            this._mask.node.active = false;
-            if (this._finger) {
-                this._finger.active = false;
-            }
 
-            if (callback) {
-                callback();
-            }
-        });
+        let steps = this._task.steps
+        for (let i = 0; i < steps.length; i++) {
+            let step = steps[i]
+            await this._processStep(step)
+        }
+
+        this._task = null;
+        cc.log('任务结束');
+        this._mask.node.active = false;
+        if (this._finger) {
+            this._finger.active = false;
+        }
     }
 
-    fillPoints(points) {
-        let p0 = points[0];
-        this._mask._graphics.moveTo(p0.x, p0.y);
-        points.slice(1).forEach(p => {
-            this._mask._graphics.lineTo(p.x, p.y);
-        });
-        this._mask._graphics.lineTo(p0.x, p0.y);
-        this._mask._graphics.stroke();
-        this._mask._graphics.fill();
-    }
+    
 
-    _processStep(step, callback) {
-        async.series({
-            //任务开始
-            stepStart(cb) {
-                if (step.onStart) {
-                    step.onStart(() => { cb() });
-                } else {
-                    cb();
-                }
-            },
+    async _processStep(step) {
+        //任务开始
+        if (step.onStart) {
+            await step.onStart()
+        }
 
-            //任务指令
-            stepCommand: (cb) => {
-                this._mask.node.active = this._task.mask || true;
-                this.scheduleOnce(() => {
-                    this._processStepCommand(step, () => {
-                        cb();
-                    });
-                }, step.delayTime || 0);
-            },
-
-            //任务结束
-            taskEnd: (cb) => {
-                this._mask._graphics.clear();
-                this._finger.active = false;
-                if (step.onEnd) {
-                    step.onEnd(() => { cb() });
-                } else {
-                    cb();
-                }
-            },
-        }, (error) => {
-            this.log(`步骤【${step.desc}】结束！`);
-            callback();
+        //任务指令
+        await new Promise((resolve, reject) => {
+            this._mask.node.active = this._task.mask || true;
+            this.scheduleOnce(() => {
+                this._processStepCommand(step, () => {
+                    resolve()
+                });
+            }, step.delayTime || 0);
         })
+
+        //任务结束
+        this._mask._graphics.clear();
+        this._finger.active = false;
+        if (step.onEnd){
+            await step.onEnd()
+        }
+
+        this.log(`步骤【${step.desc}】结束！`);
+
     }
 
     /**
@@ -335,15 +303,18 @@ export default class GodGuide extends cc.Component {
      * @param {*} step 
      * @param {*} cb 
      */
-    _processStepCommand(step, cb) {
+    async _processStepCommand(step, cb) {
 
         let cmd = GodCommand[step.command.cmd];
         if (cmd) {
             this.log(`执行步骤【${step.desc}】指令: ${step.command.cmd}`);
-            cmd(this, step, () => {
-                this.log(`步骤【${step.desc}】指令: ${step.command.cmd} 执行完毕`);
-                cb();
-            });
+            await cmd(this, step)
+            this.log(`步骤【${step.desc}】指令: ${step.command.cmd} 执行完毕`);
+            cb();
+            // cmd(this, step, () => {
+            //     this.log(`步骤【${step.desc}】指令: ${step.command.cmd} 执行完毕`);
+            //     cb();
+            // });
         } else {
             this.log(`执行步骤【${step.desc}】指令: ${step.command.cmd} 不存在！`);
             cb();
@@ -385,6 +356,7 @@ export default class GodGuide extends cc.Component {
         this._mask._graphics.stroke();
         this._mask._graphics.fill();
     }
+
 
     _focusToNode(node) {
         this._mask._graphics.clear();
@@ -515,7 +487,7 @@ export default class GodGuide extends cc.Component {
             this._autorun.string = `自动执行(${this._task.autorun ? '开' : '关'})`;
         }
     }
-    
+
     close() {
         this.node.active = false;
     }

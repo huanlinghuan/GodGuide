@@ -42,18 +42,23 @@ export const task = {
         {
             desc: '点击商店充值按钮',
             command: { cmd: 'finger', args: 'Home > Shop > btnCharge' },
-            onStart(callback) {
-                setTimeout(() => {
-                    cc.log('模拟异步获取数据');
-                    callback();
-                }, 1000);
+            async onStart(callback) {
+                await new Promise((resolve,reject) => {
+                    setTimeout(() => {
+                        cc.log('模拟异步获取数据');
+                        resolve()
+                    }, 1000);
+                })
             },
+            async onEnd(callback) {
 
-            onEnd(callback) {
-                setTimeout(() => {
-                    cc.log('模拟异步提交数据');
-                    callback();
-                }, 1000);
+                await new Promise((resolve,reject) => {
+                    setTimeout(() => {
+                        cc.log('模拟异步提交数据');
+                        resolve()
+                    }, 1000);
+                })
+
             },
         },
 

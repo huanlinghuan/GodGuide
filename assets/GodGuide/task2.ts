@@ -5,10 +5,12 @@ export const task = {
     autorun: true,
     steps: [
         {
-            onStart(callback) {
-                cc.director.on('task2', () => {
-                    callback();
-                });
+            async onStart() {
+                await new Promise((reslove, reject) => {
+                    cc.director.on('task2', () => {
+                        reslove()
+                    });
+                })
             },
             desc: "点击Home/lower/sub_btns/btn_expand_slot/btn_expand",
             command: {
